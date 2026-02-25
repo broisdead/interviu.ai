@@ -4,8 +4,7 @@ import { supabase } from "@/lib/supabase";
 
 export async function POST(req: Request) {
   try {
-    // ✅ Accept difficulty from frontend
-    const { title, jd, difficulty } = await req.json();
+    const { title, jd, difficulty, deadline } = await req.json();
 
     if (!title || !jd) {
       return NextResponse.json(
@@ -36,12 +35,14 @@ export async function POST(req: Request) {
         {
           title,
           job_description: jd,
+          deadline: deadline || null,
         },
       ])
       .select()
       .single();
 
     if (groupError || !group) {
+      console.error("Hiring group error:", groupError);
       return NextResponse.json(
         { error: "Failed to create hiring group" },
         { status: 500 }
@@ -94,6 +95,9 @@ Return ONLY JSON:
 
     const analysis = JSON.parse(analysisMatch[0]);
 
+    const coreSkills = analysis.coreSkills || [];
+    const secondarySkills = analysis.secondarySkills || [];
+
     // =====================================
     // STEP 3: GENERATE ASSESSMENT
     // =====================================
@@ -112,8 +116,8 @@ Return ONLY JSON:
 Role: ${analysis.role}
 Experience Level: ${analysis.experienceLevel}
 Difficulty: ${selectedDifficulty}
-Core Skills: ${analysis.coreSkills.join(", ")}
-Secondary Skills: ${analysis.secondarySkills.join(", ")}
+Core Skills: ${coreSkills.join(", ")}
+Secondary Skills: ${secondarySkills.join(", ")}
 
 Generate a 30-minute assessment.
 
@@ -122,7 +126,7 @@ Rules:
 - 1 ShortAnswer per secondary skill
 - 1 CaseStudy combining at least 2 core skills
 - If difficulty is Advanced → increase analytical depth and complexity
-- If Foundational → focus on core conceptual understanding
+- If Foundational → focus on conceptual understanding
 - Questions must test reasoning, not memorization
 
 Return ONLY JSON:
@@ -162,7 +166,7 @@ Return ONLY JSON:
     const parsed = JSON.parse(generationMatch[0]);
 
     // =====================================
-    // STEP 4: SAVE ASSESSMENT LINKED TO GROUP
+    // STEP 4: SAVE ASSESSMENT
     // =====================================
     const { error: assessmentError } = await supabase
       .from("assessments")
@@ -172,11 +176,12 @@ Return ONLY JSON:
           time_limit: parsed.timeLimit,
           questions: parsed.questions,
           hiring_group_id: group.id,
-          difficulty: selectedDifficulty, // 🔥 Save difficulty
+          difficulty: selectedDifficulty,
         },
       ]);
 
     if (assessmentError) {
+      console.error("Assessment save error:", assessmentError);
       return NextResponse.json(
         { error: "Failed to save assessment" },
         { status: 500 }
