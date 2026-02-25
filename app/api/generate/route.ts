@@ -5,7 +5,6 @@ import { supabase } from "@/lib/supabase";
 export async function POST(req: Request) {
   try {
     const { jd } = await req.json();
-
     const apiKey = process.env.GROQ_API_KEY;
 
     if (!apiKey) {
@@ -17,32 +16,98 @@ export async function POST(req: Request) {
 
     const groq = new Groq({ apiKey });
 
-    const completion = await groq.chat.completions.create({
+    // =============================
+    // STEP 1: STRUCTURED ROLE ANALYSIS
+    // =============================
+    const analysisCompletion = await groq.chat.completions.create({
       model: "llama-3.1-8b-instant",
+      temperature: 0.2,
       messages: [
         {
           role: "system",
           content:
-            "You are an expert recruiter. Always return ONLY valid JSON. No markdown. No extra text.",
+            "You are an expert hiring analyst. Return ONLY valid JSON.",
         },
         {
           role: "user",
           content: `
-From this job description:
+Analyze this job description and extract structured hiring metadata:
 
 ${jd}
-
-1. Extract role title
-2. Generate a 30-minute assessment
-3. Include:
-   - 3 MCQs
-   - 3 ShortAnswer
-   - 1 CaseStudy
 
 Return ONLY JSON:
 
 {
   "role": "",
+  "seniority": "",
+  "domain": "",
+  "experienceLevel": "Junior | Mid | Senior",
+  "coreSkills": [],
+  "secondarySkills": []
+}
+`
+        }
+      ]
+    });
+
+    const analysisText =
+      analysisCompletion.choices[0]?.message?.content || "";
+
+    const analysisMatch = analysisText.match(/\{[\s\S]*\}/);
+
+    if (!analysisMatch) {
+      return NextResponse.json(
+        { error: "Failed to parse role analysis" },
+        { status: 500 }
+      );
+    }
+
+    const analysis = JSON.parse(analysisMatch[0]);
+
+    // Determine difficulty
+    let difficulty = "Intermediate";
+    if (analysis.experienceLevel === "Senior") {
+      difficulty = "Advanced";
+    }
+    if (analysis.experienceLevel === "Junior") {
+      difficulty = "Foundational";
+    }
+
+    // =============================
+    // STEP 2: SKILL-MAPPED QUESTION GENERATION
+    // =============================
+    const generationCompletion = await groq.chat.completions.create({
+      model: "llama-3.1-8b-instant",
+      temperature: 0.3,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are an expert recruiter designing structured assessments. Return ONLY valid JSON.",
+        },
+        {
+          role: "user",
+          content: `
+Role: ${analysis.role}
+Domain: ${analysis.domain}
+Experience Level: ${analysis.experienceLevel}
+Difficulty: ${difficulty}
+Core Skills: ${analysis.coreSkills.join(", ")}
+Secondary Skills: ${analysis.secondarySkills.join(", ")}
+
+Generate a 30-minute assessment.
+
+Rules:
+- 1 MCQ per core skill
+- 1 ShortAnswer per secondary skill
+- 1 CaseStudy combining at least 2 core skills
+- Increase complexity if difficulty is Advanced
+- Questions must test reasoning, not memorization
+
+Return ONLY JSON:
+
+{
+  "role": "${analysis.role}",
   "timeLimit": 30,
   "questions": [
     {
@@ -51,29 +116,33 @@ Return ONLY JSON:
       "text": "",
       "options": [],
       "idealAnswer": "",
-      "maxScore": 10
+      "maxScore": 10,
+      "skill": ""
     }
   ]
 }
 `
         }
-      ],
-      temperature: 0.3,
+      ]
     });
 
-    const text = completion.choices[0]?.message?.content || "";
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const generationText =
+      generationCompletion.choices[0]?.message?.content || "";
 
-    if (!jsonMatch) {
+    const generationMatch = generationText.match(/\{[\s\S]*\}/);
+
+    if (!generationMatch) {
       return NextResponse.json(
-        { error: "Failed to extract JSON from AI response" },
+        { error: "Failed to parse assessment generation" },
         { status: 500 }
       );
     }
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    const parsed = JSON.parse(generationMatch[0]);
 
-    // 🔥 Insert into Supabase
+    // =============================
+    // SAVE TO SUPABASE
+    // =============================
     const { data, error } = await supabase
       .from("assessments")
       .insert([
@@ -97,6 +166,7 @@ Return ONLY JSON:
     return NextResponse.json({
       id: data.id,
       assessment: parsed,
+      analysis
     });
 
   } catch (error) {
