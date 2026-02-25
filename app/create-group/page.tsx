@@ -8,6 +8,8 @@ export default function CreateGroupPage() {
 
   const [title, setTitle] = useState("");
   const [jd, setJd] = useState("");
+  const [difficulty, setDifficulty] = useState("Intermediate");
+  const [deadline, setDeadline] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleCreate = async () => {
@@ -22,7 +24,12 @@ export default function CreateGroupPage() {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, jd }),
+        body: JSON.stringify({
+          title,
+          jd,
+          difficulty,
+          deadline: deadline || null,
+        }),
       });
 
       const result = await res.json();
@@ -51,6 +58,7 @@ export default function CreateGroupPage() {
 
         <div className="space-y-6">
 
+          {/* Title */}
           <input
             type="text"
             placeholder="Group Title (e.g. Data Scientist - Growth)"
@@ -59,6 +67,36 @@ export default function CreateGroupPage() {
             className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-4"
           />
 
+          {/* Difficulty */}
+          <div>
+            <label className="block text-sm text-zinc-400 mb-2">
+              Select Difficulty
+            </label>
+            <select
+              value={difficulty}
+              onChange={(e) => setDifficulty(e.target.value)}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-4"
+            >
+              <option value="Foundational">Foundational</option>
+              <option value="Intermediate">Intermediate</option>
+              <option value="Advanced">Advanced</option>
+            </select>
+          </div>
+
+          {/* Deadline */}
+          <div>
+            <label className="block text-sm text-zinc-400 mb-2">
+              Deadline (Optional)
+            </label>
+            <input
+              type="date"
+              value={deadline}
+              onChange={(e) => setDeadline(e.target.value)}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-4"
+            />
+          </div>
+
+          {/* JD */}
           <textarea
             placeholder="Paste Job Description..."
             value={jd}
@@ -66,6 +104,7 @@ export default function CreateGroupPage() {
             className="w-full h-60 bg-zinc-800 border border-zinc-700 rounded-xl p-4 resize-none"
           />
 
+          {/* Submit Button */}
           <button
             onClick={handleCreate}
             disabled={loading}
