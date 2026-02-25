@@ -4,7 +4,8 @@ import { supabase } from "@/lib/supabase";
 
 export async function POST(req: Request) {
   try {
-    const { title, jd } = await req.json();
+    // ✅ Accept difficulty from frontend
+    const { title, jd, difficulty } = await req.json();
 
     if (!title || !jd) {
       return NextResponse.json(
@@ -12,6 +13,8 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+
+    const selectedDifficulty = difficulty || "Intermediate";
 
     const apiKey = process.env.GROQ_API_KEY;
 
@@ -91,10 +94,6 @@ Return ONLY JSON:
 
     const analysis = JSON.parse(analysisMatch[0]);
 
-    let difficulty = "Intermediate";
-    if (analysis.experienceLevel === "Senior") difficulty = "Advanced";
-    if (analysis.experienceLevel === "Junior") difficulty = "Foundational";
-
     // =====================================
     // STEP 3: GENERATE ASSESSMENT
     // =====================================
@@ -112,7 +111,7 @@ Return ONLY JSON:
           content: `
 Role: ${analysis.role}
 Experience Level: ${analysis.experienceLevel}
-Difficulty: ${difficulty}
+Difficulty: ${selectedDifficulty}
 Core Skills: ${analysis.coreSkills.join(", ")}
 Secondary Skills: ${analysis.secondarySkills.join(", ")}
 
@@ -122,6 +121,8 @@ Rules:
 - 1 MCQ per core skill
 - 1 ShortAnswer per secondary skill
 - 1 CaseStudy combining at least 2 core skills
+- If difficulty is Advanced → increase analytical depth and complexity
+- If Foundational → focus on core conceptual understanding
 - Questions must test reasoning, not memorization
 
 Return ONLY JSON:
@@ -171,6 +172,7 @@ Return ONLY JSON:
           time_limit: parsed.timeLimit,
           questions: parsed.questions,
           hiring_group_id: group.id,
+          difficulty: selectedDifficulty, // 🔥 Save difficulty
         },
       ]);
 
