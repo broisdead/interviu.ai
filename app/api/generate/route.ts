@@ -4,7 +4,15 @@ import { supabase } from "@/lib/supabase";
 
 export async function POST(req: Request) {
   try {
-    const { jd } = await req.json();
+    const { title, jd } = await req.json();
+
+    if (!title || !jd) {
+      return NextResponse.json(
+        { error: "Title and JD are required" },
+        { status: 400 }
+      );
+    }
+
     const apiKey = process.env.GROQ_API_KEY;
 
     if (!apiKey) {
@@ -16,9 +24,30 @@ export async function POST(req: Request) {
 
     const groq = new Groq({ apiKey });
 
-    // =============================
-    // STEP 1: STRUCTURED ROLE ANALYSIS
-    // =============================
+    // =====================================
+    // STEP 1: CREATE HIRING GROUP
+    // =====================================
+    const { data: group, error: groupError } = await supabase
+      .from("hiring_groups")
+      .insert([
+        {
+          title,
+          job_description: jd,
+        },
+      ])
+      .select()
+      .single();
+
+    if (groupError || !group) {
+      return NextResponse.json(
+        { error: "Failed to create hiring group" },
+        { status: 500 }
+      );
+    }
+
+    // =====================================
+    // STEP 2: ROLE ANALYSIS
+    // =====================================
     const analysisCompletion = await groq.chat.completions.create({
       model: "llama-3.1-8b-instant",
       temperature: 0.2,
@@ -39,8 +68,6 @@ Return ONLY JSON:
 
 {
   "role": "",
-  "seniority": "",
-  "domain": "",
   "experienceLevel": "Junior | Mid | Senior",
   "coreSkills": [],
   "secondarySkills": []
@@ -64,18 +91,13 @@ Return ONLY JSON:
 
     const analysis = JSON.parse(analysisMatch[0]);
 
-    // Determine difficulty
     let difficulty = "Intermediate";
-    if (analysis.experienceLevel === "Senior") {
-      difficulty = "Advanced";
-    }
-    if (analysis.experienceLevel === "Junior") {
-      difficulty = "Foundational";
-    }
+    if (analysis.experienceLevel === "Senior") difficulty = "Advanced";
+    if (analysis.experienceLevel === "Junior") difficulty = "Foundational";
 
-    // =============================
-    // STEP 2: SKILL-MAPPED QUESTION GENERATION
-    // =============================
+    // =====================================
+    // STEP 3: GENERATE ASSESSMENT
+    // =====================================
     const generationCompletion = await groq.chat.completions.create({
       model: "llama-3.1-8b-instant",
       temperature: 0.3,
@@ -89,7 +111,6 @@ Return ONLY JSON:
           role: "user",
           content: `
 Role: ${analysis.role}
-Domain: ${analysis.domain}
 Experience Level: ${analysis.experienceLevel}
 Difficulty: ${difficulty}
 Core Skills: ${analysis.coreSkills.join(", ")}
@@ -101,7 +122,6 @@ Rules:
 - 1 MCQ per core skill
 - 1 ShortAnswer per secondary skill
 - 1 CaseStudy combining at least 2 core skills
-- Increase complexity if difficulty is Advanced
 - Questions must test reasoning, not memorization
 
 Return ONLY JSON:
@@ -140,39 +160,36 @@ Return ONLY JSON:
 
     const parsed = JSON.parse(generationMatch[0]);
 
-    // =============================
-    // SAVE TO SUPABASE
-    // =============================
-    const { data, error } = await supabase
+    // =====================================
+    // STEP 4: SAVE ASSESSMENT LINKED TO GROUP
+    // =====================================
+    const { error: assessmentError } = await supabase
       .from("assessments")
       .insert([
         {
           role: parsed.role,
           time_limit: parsed.timeLimit,
           questions: parsed.questions,
+          hiring_group_id: group.id,
         },
-      ])
-      .select()
-      .single();
+      ]);
 
-    if (error) {
-      console.error("Supabase insert error:", error);
+    if (assessmentError) {
       return NextResponse.json(
-        { error: "Database insert failed" },
+        { error: "Failed to save assessment" },
         { status: 500 }
       );
     }
 
     return NextResponse.json({
-      id: data.id,
-      assessment: parsed,
-      analysis
+      hiringGroupId: group.id,
+      message: "Hiring group created successfully",
     });
 
   } catch (error) {
-    console.error("Generation error:", error);
+    console.error("Generate error:", error);
     return NextResponse.json(
-      { error: "Failed to generate assessment" },
+      { error: "Failed to generate hiring group" },
       { status: 500 }
     );
   }
