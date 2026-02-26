@@ -11,32 +11,25 @@ export default function CreateGroupPage() {
   const [difficulty, setDifficulty] = useState("Intermediate");
   const [deadline, setDeadline] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const today = new Date().toISOString().split("T")[0];
 
   const handleCreate = async () => {
-    if (!title.trim()) {
-      alert("Please enter a group title.");
-      return;
-    }
-
-    if (!jd.trim()) {
-      alert("Please paste the job description.");
-      return;
-    }
-
-    if (!difficulty) {
-      alert("Please select a difficulty.");
-      return;
-    }
-
-    if (!deadline) {
-      alert("Please select a deadline.");
+    //  Single validation message
+    if (
+      !title.trim() ||
+      !jd.trim() ||
+      !difficulty ||
+      !deadline
+    ) {
+      setError("Please fill all details");
       return;
     }
 
     try {
       setLoading(true);
+      setError(""); // clear old error
 
       const res = await fetch("/api/generate", {
         method: "POST",
@@ -59,7 +52,7 @@ export default function CreateGroupPage() {
 
     } catch (error) {
       console.error("Create group error:", error);
-      alert("Something went wrong.");
+      setError("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -75,12 +68,22 @@ export default function CreateGroupPage() {
 
         <div className="space-y-6">
 
+          {/* 🔴 Error Message */}
+          {error && (
+            <div className="bg-red-500/10 border border-red-500 text-red-400 p-3 rounded-xl text-sm">
+              {error}
+            </div>
+          )}
+
           {/* Title */}
           <input
             type="text"
             placeholder="Group Title (e.g. Data Scientist - Growth)"
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              setError("");
+            }}
             className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-4"
           />
 
@@ -91,7 +94,10 @@ export default function CreateGroupPage() {
             </label>
             <select
               value={difficulty}
-              onChange={(e) => setDifficulty(e.target.value)}
+              onChange={(e) => {
+                setDifficulty(e.target.value);
+                setError("");
+              }}
               className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-4"
             >
               <option value="Foundational">Foundational</option>
@@ -100,7 +106,7 @@ export default function CreateGroupPage() {
             </select>
           </div>
 
-          {/* Deadline (Now Required) */}
+          {/* Deadline */}
           <div>
             <label className="block text-sm text-zinc-400 mb-2">
               Deadline *
@@ -110,7 +116,10 @@ export default function CreateGroupPage() {
               min={today}
               required
               value={deadline}
-              onChange={(e) => setDeadline(e.target.value)}
+              onChange={(e) => {
+                setDeadline(e.target.value);
+                setError("");
+              }}
               className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-4"
             />
           </div>
@@ -119,7 +128,10 @@ export default function CreateGroupPage() {
           <textarea
             placeholder="Paste Job Description..."
             value={jd}
-            onChange={(e) => setJd(e.target.value)}
+            onChange={(e) => {
+              setJd(e.target.value);
+              setError("");
+            }}
             className="w-full h-60 bg-zinc-800 border border-zinc-700 rounded-xl p-4 resize-none"
           />
 
