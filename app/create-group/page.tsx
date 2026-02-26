@@ -12,9 +12,26 @@ export default function CreateGroupPage() {
   const [deadline, setDeadline] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const today = new Date().toISOString().split("T")[0];
+
   const handleCreate = async () => {
-    if (!title || !jd) {
-      alert("Please provide both title and job description.");
+    if (!title.trim()) {
+      alert("Please enter a group title.");
+      return;
+    }
+
+    if (!jd.trim()) {
+      alert("Please paste the job description.");
+      return;
+    }
+
+    if (!difficulty) {
+      alert("Please select a difficulty.");
+      return;
+    }
+
+    if (!deadline) {
+      alert("Please select a deadline.");
       return;
     }
 
@@ -28,7 +45,7 @@ export default function CreateGroupPage() {
           title,
           jd,
           difficulty,
-          deadline: deadline || null,
+          deadline,
         }),
       });
 
@@ -83,13 +100,15 @@ export default function CreateGroupPage() {
             </select>
           </div>
 
-          {/* Deadline */}
+          {/* Deadline (Now Required) */}
           <div>
             <label className="block text-sm text-zinc-400 mb-2">
-              Deadline (Optional)
+              Deadline *
             </label>
             <input
               type="date"
+              min={today}
+              required
               value={deadline}
               onChange={(e) => setDeadline(e.target.value)}
               className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-4"
@@ -107,7 +126,13 @@ export default function CreateGroupPage() {
           {/* Submit Button */}
           <button
             onClick={handleCreate}
-            disabled={loading}
+            disabled={
+              loading ||
+              !title.trim() ||
+              !jd.trim() ||
+              !difficulty ||
+              !deadline
+            }
             className="w-full bg-white text-black py-4 rounded-xl font-medium hover:opacity-90 transition disabled:opacity-50"
           >
             {loading ? "Generating Assessment..." : "Create Hiring Group"}
